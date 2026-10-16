@@ -149,6 +149,7 @@ whichever apply:
 | `starting=false` | untick (overrides a `\genaisetup` default) |
 | `module=M249`, `presentation=27J` | override the heading prefix |
 | `frame` | draw a box round the whole proforma |
+| `gap=3em` | vertical space after it, matching `ou-tma`'s gap between questions (default); `gap=0pt` for none |
 | `showinstruction=false` | drop the italic "Please use this proforma…" line |
 | `variant=<name>` | use another proforma wording (see below) |
 

@@ -1,5 +1,5 @@
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{ou-genai}[2026/10/16 v1.1 OU TMA proforma for generative AI use]
+\ProvidesPackage{ou-genai}[2026/10/16 v1.2 OU TMA proforma for generative AI use]
 
 %% ---------------------------------------------------------------
 %% Reproduces the "TMA proforma for generative AI use" that the OU
@@ -92,6 +92,7 @@
 \tl_new:N    \l__genai_module_tl
 \tl_new:N    \l__genai_presentation_tl
 \tl_new:N    \l__genai_prefix_tl
+\tl_new:N    \l__genai_gap_tl             % vertical space after the proforma
 \tl_new:N    \l__genai_tmp_tl
 \tl_new:N    \l__genai_cur_tl            % variant currently being defined
 \tl_new:N    \l__genai_removed_tl        % last item taken out by remove/movetoend
@@ -106,6 +107,7 @@
 \int_new:N   \l__genai_ticked_int
 
 \tl_set:Nn \l__genai_variant_tl { m248-26j }
+\tl_set:Nn \l__genai_gap_tl { 3em }   % what ou-tma leaves between questions
 \bool_set_true:N \l__genai_showinstruction_bool
 
 %% ---- per-item tick state (shared by name across variants) -----
@@ -241,6 +243,7 @@
     presentation    .tl_set:N   = \l__genai_presentation_tl,
     frame           .bool_set:N = \l__genai_frame_bool,
     frame           .default:n  = true,
+    gap             .tl_set:N   = \l__genai_gap_tl,
     showinstruction .bool_set:N = \l__genai_showinstruction_bool,
     showinstruction .default:n  = true,
   }
@@ -339,7 +342,7 @@
     \end{genai@list}
   }
 
-%% \genaiproforma[variant=..., module=..., presentation=..., frame,
+%% \genaiproforma[variant=..., module=..., presentation=..., frame, gap=3em,
 %%                showinstruction=false, <item>, <item>={note}, ...]
 \NewDocumentCommand \genaiproforma { O{} }
   {
@@ -367,6 +370,9 @@
               \par
             }
             { \__genai_body: }
+          %% Separate the proforma from the first answer by the same gap
+          %% ou-tma leaves between questions. gap=0pt suppresses it.
+          \tl_if_empty:NF \l__genai_gap_tl { \par \vspace { \l__genai_gap_tl } }
         }
         {
           \msg_error:nnee { ou-genai } { no-variant }
