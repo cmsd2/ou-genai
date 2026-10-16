@@ -205,6 +205,12 @@ Everything a variant can set:
   Word uses (U+2610 / U+2612), so no font juggling is needed.
 - `ou-tma.sty` is a separate CTAN package; this one only reads its
   `\mycourse` value and works without it.
+- Under `ou-tma`, the first maths in a document used to attract two
+  "Font shape `U/wasy/b/n' not available" warnings, pinned to whatever
+  line that was, usually `\genaiproforma`. The cause is `wasysym` declaring
+  a bold series its font lacks while `bm` probes for it. This package
+  declares that shape as a silent substitution, so the warnings are gone
+  for the whole document, not just the proforma.
 
 ## Licence
 

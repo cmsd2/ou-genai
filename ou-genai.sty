@@ -1,5 +1,5 @@
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{ou-genai}[2026/10/16 v1.0 OU TMA proforma for generative AI use]
+\ProvidesPackage{ou-genai}[2026/10/16 v1.1 OU TMA proforma for generative AI use]
 
 %% ---------------------------------------------------------------
 %% Reproduces the "TMA proforma for generative AI use" that the OU
@@ -18,12 +18,32 @@
 %% ---------------------------------------------------------------
 
 \RequirePackage{amssymb}   % \square and \boxtimes for the tick boxes
+\RequirePackage{graphicx}  % \scalebox, to enlarge them without a size switch
+
+%% ou-tma loads wasysym and bm. wasysym declares a bold series for its
+%% font (U/wasy/b/n) that does not exist, and bm probes it, so the first
+%% maths in the document -- this proforma, when it sits at the top -- gets
+%% two "Font shape U/wasy/b/n not available" warnings pinned to its line.
+%% Declaring the shape as a silent substitution resolves to the same
+%% medium font LaTeX falls back to anyway, minus the warning. The family
+%% must come from uwasy.fd first (declaring it here by hand would stop
+%% LaTeX ever reading that file, losing the medium shapes as well), so
+%% skip the whole thing when the wasy fonts are not installed.
+\IfFileExists{uwasy.fd}{%
+  \begingroup
+    \def\f@encoding{U}\def\f@family{wasy}\try@load@fontshape
+  \endgroup
+  \DeclareFontShape{U}{wasy}{b}{n}{<->ssub*wasy/m/n}{}%
+}{}
 
 %% ---------------------------------------------------------------
 %% 1. Plain-LaTeX hooks. \renewcommand any of these to restyle.
 %% ---------------------------------------------------------------
-\newcommand{\genaiunticked}{\raisebox{-0.15ex}{\large$\square$}}
-\newcommand{\genaiticked}{\raisebox{-0.15ex}{\large$\boxtimes$}}
+%% Scaled with \scalebox rather than set in \large maths: a size switch
+%% makes LaTeX load every maths symbol font again at the new size, which
+%% is slow and noisy; scaling a normal-size glyph loads nothing new.
+\newcommand{\genaiunticked}{\raisebox{-0.15ex}{\scalebox{1.25}{$\square$}}}
+\newcommand{\genaiticked}{\raisebox{-0.15ex}{\scalebox{1.25}{$\boxtimes$}}}
 \newcommand{\genaidetail}[1]{\emph{#1}}
 \newcommand{\genaiheadingfont}{\bfseries}
 \newcommand{\genaiinstructionfont}{\itshape}
