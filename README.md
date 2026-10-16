@@ -30,36 +30,117 @@ produces
 >   e.g. when working through the mathematics.
 > ☐ I did not use generative AI to help me with this TMA
 
-Sibling of [ou-refs](../ou-refs): same install, same layout.
+Sibling of [ou-refs](https://github.com/cmsd2/ou-refs): same install, same
+layout. Needs only `amssymb` (for the box glyphs) and a LaTeX from 2020 or
+later (`expl3` is in the kernel).
 
 ## Install
 
+It is one file, `ou-genai.sty`. Put it where your TeX distribution looks for
+personal packages, then `\usepackage{ou-genai}` works from any document.
+
+`tlmgr` (TeX Live) and the MiKTeX Console only install packages published on
+CTAN, and this one is not, so neither can fetch it; that is what the steps
+below are for. The one CTAN dependency worth having is the OU's own TMA
+package, which they can install:
+
 ```sh
-make link      # symlink into TEXMFHOME; repo edits take effect immediately
-make check     # confirm kpsewhich resolves the file
-make test      # build example.tex from a dir holding no copy of the .sty
+tlmgr install ou-tma     # TeX Live / MacTeX; MiKTeX installs it on first use
+```
+
+### TeX Live / MacTeX (macOS, Linux, CoCalc, Overleaf's engine)
+
+`kpsewhich` reports the personal tree; TeX Live scans it live, so there is
+no database to refresh:
+
+```sh
+git clone https://github.com/cmsd2/ou-genai.git
+cd ou-genai
+make link        # symlink into TEXMFHOME; `git pull` updates it in place
+make check       # prints the path kpsewhich now resolves ou-genai.sty to
+make test        # builds example.tex from a dir holding no copy of the .sty
 ```
 
 `make install` copies instead of symlinking; `make uninstall` removes it.
-On CoCalc: `git clone ... ~/ou-genai && cd ~/ou-genai && make link`.
+Without `make`, the same by hand:
+
+```sh
+dir="$(kpsewhich -var-value=TEXMFHOME)/tex/latex/ou-genai"   # ~/Library/texmf/... on macOS, ~/texmf/... on Linux
+mkdir -p "$dir" && cp ou-genai.sty "$dir/"
+kpsewhich ou-genai.sty                                        # should print that path
+```
+
+### MiKTeX (Windows)
+
+MiKTeX has no `TEXMFHOME`; it keeps a list of *roots* and an index of their
+contents. Register the clone as a root, then refresh the index whenever the
+file changes:
+
+```powershell
+git clone https://github.com/cmsd2/ou-genai.git $HOME\ou-genai
+mkdir $HOME\texmf\tex\latex\ou-genai
+copy $HOME\ou-genai\ou-genai.sty $HOME\texmf\tex\latex\ou-genai\
+initexmf --register-root=$HOME\texmf
+miktex fndb refresh            # older MiKTeX: initexmf --update-fndb
+kpsewhich ou-genai.sty         # should print the path under $HOME\texmf
+```
+
+If you already have a personal root (`initexmf --report` lists them), drop
+the file into its `tex\latex\ou-genai\` and just refresh.
+
+### No install
+
+Copy `ou-genai.sty` next to the `.tex` file. That is also the Overleaf
+route: upload it to the project.
 
 ## Use
 
-Put `\genaiproforma[...]` straight after `\begin{document}` (the OU wants it
-first). With [ou-tma](https://ctan.org/pkg/ou-tma) loaded, the module code
-is taken from `\mycourse`, so nothing else is needed.
+### 1. Load it
+
+```latex
+\documentclass[a4paper,11pt]{article}
+\usepackage[pdfbookmark]{ou-tma}   % the usual OU TMA package, optional
+\usepackage{ou-genai}
+
+\myname{A. Student}
+\mypin{X1234567}
+\mycourse{M248}
+\mytma{01}
+```
+
+Load order does not matter. If `ou-tma` is present, `\mycourse` supplies the
+module code in the heading; without it the variant's own default (`M248`)
+is used, or pass `module=`.
+
+### 2. Configure (optional)
+
+Defaults for the whole document go in the preamble:
+
+```latex
+\genaisetup{variant=m248-26j, frame, showinstruction=false}
+```
+
+Every key below is valid here as well as on the command itself.
+
+### 3. Invoke
+
+Straight after `\begin{document}` (the OU wants the proforma first), tick
+whichever apply:
+
+```latex
+\begin{document}
+\genaiproforma[learning, improving={polished the wording of Q3}]
+```
 
 | Key | Effect |
 |---|---|
 | `starting`, `improving`, `learning`, `none` | tick that box |
 | `learning={worked through Unit 2}` | tick it and print a note underneath |
-| `starting=false` | untick (the default; useful to override `\genaisetup`) |
+| `starting=false` | untick (overrides a `\genaisetup` default) |
 | `module=M249`, `presentation=27J` | override the heading prefix |
 | `frame` | draw a box round the whole proforma |
-| `showinstruction=false` | drop the italic "Please use this proforma..." line |
+| `showinstruction=false` | drop the italic "Please use this proforma…" line |
 | `variant=<name>` | use another proforma wording (see below) |
-
-The same keys work in `\genaisetup{...}` in the preamble, for defaults.
 
 Ticking nothing raises a package warning rather than silently printing an
 empty form. So does ticking `none` alongside another box.
@@ -93,7 +174,8 @@ issues a different form, add a new block under it:
 and select it per document with `\genaisetup{variant=m248-27j}` (or
 `\genaiproforma[variant=...]`). Old TMAs keep building unchanged because
 they still resolve to `m248-26j`. A variant can equally be defined in a TMA
-preamble; `example.tex` does exactly that.
+preamble; `example.tex` does exactly that. Define variants at top level
+(the preamble), not inside a group or environment.
 
 Everything a variant can set:
 
