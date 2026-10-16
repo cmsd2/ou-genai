@@ -73,20 +73,30 @@ kpsewhich ou-genai.sty                                        # should print tha
 ### MiKTeX (Windows)
 
 MiKTeX has no `TEXMFHOME`; it keeps a list of *roots* and an index of their
-contents. Register the clone as a root, then refresh the index whenever the
-file changes:
+contents. `link-windows.ps1` is `make link` for that world: it registers
+`$HOME\texmf` as a root and puts a symlink to `ou-genai.sty` in it, so
+`git pull` updates the installed copy. Symlinks need Developer Mode (Settings
+> System > For developers) or an elevated shell; without either the script
+copies the file instead and tells you to re-run it after each pull.
 
 ```powershell
-git clone https://github.com/cmsd2/ou-genai.git $HOME\ou-genai
+git clone https://github.com/cmsd2/ou-genai.git
+cd ou-genai
+.\link-windows.ps1             # -Root D:\texmf to use another root; -Unlink to undo
+```
+
+It ends by printing where `kpsewhich` now finds `ou-genai.sty`. Re-run it
+only if files are added or renamed; MiKTeX indexes names, not contents.
+
+By hand, if you'd rather copy than link:
+
+```powershell
 mkdir $HOME\texmf\tex\latex\ou-genai
-copy $HOME\ou-genai\ou-genai.sty $HOME\texmf\tex\latex\ou-genai\
+copy ou-genai.sty $HOME\texmf\tex\latex\ou-genai\
 initexmf --register-root=$HOME\texmf
 miktex fndb refresh            # older MiKTeX: initexmf --update-fndb
 kpsewhich ou-genai.sty         # should print the path under $HOME\texmf
 ```
-
-If you already have a personal root (`initexmf --report` lists them), drop
-the file into its `tex\latex\ou-genai\` and just refresh.
 
 ### No install
 
