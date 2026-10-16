@@ -195,3 +195,9 @@ Everything a variant can set:
   Word uses (U+2610 / U+2612), so no font juggling is needed.
 - `ou-tma.sty` is a separate CTAN package; this one only reads its
   `\mycourse` value and works without it.
+
+## Licence
+
+[MIT](LICENSE). The proforma wording is the Open University's, reproduced
+as issued for use in OU assessments; the MIT licence covers this package's
+code and documentation.
