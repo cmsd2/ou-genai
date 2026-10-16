@@ -1,0 +1,52 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[pdfbookmark]{ou-tma}
+\usepackage{ou-genai}
+
+\myname{A. Student}
+\mypin{X1234567}
+\mycourse{M248}
+\mytma{01}
+\setdate{October 2026}
+
+%% ---------------------------------------------------------------
+%% Future-proofing demo: a hypothetical later presentation whose
+%% proforma gained one box and lost another. The m248-26j block in
+%% ou-genai.sty is untouched; this variant is built on top of it.
+%% A real one would go in ou-genai.sty, but a preamble works too.
+%% ---------------------------------------------------------------
+\genaidefinevariant{demo-27j}{
+  inherit      = m248-26j,
+  presentation = {27J},
+  items = {
+    coding = {To write or check code}
+             {e.g. an R script to draw a plot.},
+  },
+  remove    = {improving},
+  movetoend = {none},        % new items append, so keep "did not use" last
+}
+
+\begin{document}
+
+%% 1. The M248 26J proforma, zero configuration: module comes from
+%%    \mycourse, presentation from the variant. Two boxes ticked, one
+%%    carrying a note.
+\genaiproforma[learning={worked through the Unit 2 derivations}, improving]
+
+\begin{question}
+  \qpart
+  The proforma above is what \verb|\genaiproforma[...]| produces with the
+  default variant. Everything below is the same command with other keys.
+\end{question}
+
+\clearpage
+
+%% 2. The "did not use" case, framed, instruction line hidden.
+\genaiproforma[none, frame, showinstruction=false]
+
+\bigskip
+
+%% 3. The demo variant: inherits m248-26j, adds `coding', drops `improving'.
+%%    Module override shows the key beating \mycourse.
+\genaiproforma[variant=demo-27j, module=M249, coding, starting]
+
+\end{document}

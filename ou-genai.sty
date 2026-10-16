@@ -1,0 +1,395 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{ou-genai}[2026/10/16 v1.0 OU TMA proforma for generative AI use]
+
+%% ---------------------------------------------------------------
+%% Reproduces the "TMA proforma for generative AI use" that the OU
+%% asks students to put at the start of each TMA.
+%%
+%%   \usepackage{ou-genai}
+%%   ...
+%%   \begin{document}
+%%   \genaiproforma[learning, improving={polished the wording of Q3}]
+%%
+%% The wording lives in a named VARIANT (see the bottom of this file).
+%% The M248 26J proforma is variant `m248-26j' and is the default.
+%% When a later module/year changes the form, add a NEW variant --
+%% do not edit an existing one -- and select it with
+%%   \genaisetup{variant=...}
+%% ---------------------------------------------------------------
+
+\RequirePackage{amssymb}   % \square and \boxtimes for the tick boxes
+
+%% ---------------------------------------------------------------
+%% 1. Plain-LaTeX hooks. \renewcommand any of these to restyle.
+%% ---------------------------------------------------------------
+\newcommand{\genaiunticked}{\raisebox{-0.15ex}{\large$\square$}}
+\newcommand{\genaiticked}{\raisebox{-0.15ex}{\large$\boxtimes$}}
+\newcommand{\genaidetail}[1]{\emph{#1}}
+\newcommand{\genaiheadingfont}{\bfseries}
+\newcommand{\genaiinstructionfont}{\itshape}
+
+%% Hanging-indent list: box in the margin, wording alongside, like the docx.
+\newenvironment{genai@list}{%
+  \begin{list}{}{%
+    \renewcommand{\makelabel}[1]{##1\hfil}%
+    \setlength{\leftmargin}{2.75em}%
+    \setlength{\labelwidth}{1.75em}%
+    \setlength{\labelsep}{1em}%
+    \setlength{\itemindent}{0pt}%
+    \setlength{\listparindent}{0pt}%
+    \setlength{\topsep}{0.5ex}%
+    \setlength{\itemsep}{1ex}%
+    \setlength{\parsep}{0pt}%
+  }}{\end{list}}
+
+%% ---------------------------------------------------------------
+%% 2. Machinery (expl3). A variant is
+%%      g__genai_<name>_prop       heading/instruction/intro/tick/
+%%                                 module/presentation/exclusive
+%%      g__genai_<name>_items_seq  { {key}{wording}{e.g. line} } ...
+%%    and each item key becomes a key in the keyval path
+%%      ou-genai/variant/<name>
+%%    so that \genaiproforma[key] / [key=note] ticks that box.
+%% ---------------------------------------------------------------
+\ExplSyntaxOn
+
+\msg_new:nnn { ou-genai } { no-variant }
+  { Generative~AI~proforma~variant~'#1'~is~not~defined.~
+    Define~it~with~\token_to_str:N \genaidefinevariant,~or~choose~one~of:~#2 }
+\msg_new:nnn { ou-genai } { nothing-ticked }
+  { No~box~is~ticked~on~the~generative~AI~proforma~(variant~'#1').~
+    Pass~at~least~one~of~[#2]~to~\token_to_str:N \genaiproforma. }
+\msg_new:nnn { ou-genai } { exclusive }
+  { '#1'~is~ticked~together~with~other~boxes~on~the~generative~AI~proforma.~
+    That~is~contradictory. }
+\msg_new:nnn { ou-genai } { unknown-inherit }
+  { Cannot~inherit~from~undefined~variant~'#1'. }
+\msg_new:nnn { ou-genai } { unknown-item }
+  { Variant~'#1'~has~no~item~'#2'~to~remove. }
+
+%% ---- state ----------------------------------------------------
+\tl_new:N    \l__genai_variant_tl
+\tl_new:N    \l__genai_module_tl
+\tl_new:N    \l__genai_presentation_tl
+\tl_new:N    \l__genai_prefix_tl
+\tl_new:N    \l__genai_tmp_tl
+\tl_new:N    \l__genai_cur_tl            % variant currently being defined
+\tl_new:N    \l__genai_removed_tl        % last item taken out by remove/movetoend
+\dim_new:N   \l__genai_parskip_dim
+\seq_new:N   \l__genai_tmp_seq
+\seq_new:N   \g__genai_variants_seq      % names, for the error message
+\clist_new:N \l__genai_tmp_clist
+\clist_new:N \l__genai_keys_clist
+\bool_new:N  \l__genai_frame_bool
+\bool_new:N  \l__genai_showinstruction_bool
+\bool_new:N  \l__genai_found_bool
+\int_new:N   \l__genai_ticked_int
+
+\tl_set:Nn \l__genai_variant_tl { m248-26j }
+\bool_set_true:N \l__genai_showinstruction_bool
+
+%% ---- per-item tick state (shared by name across variants) -----
+\cs_new_protected:Npn \__genai_ensure_state:n #1
+  {
+    \bool_if_exist:cF { l__genai_item_#1_bool } { \bool_new:c { l__genai_item_#1_bool } }
+    \tl_if_exist:cF   { l__genai_item_#1_tl }   { \tl_new:c   { l__genai_item_#1_tl } }
+  }
+
+%% \genaiproforma[key] / [key=true] / [key=false] / [key={free text}]
+\cs_new_protected:Npn \__genai_set_item:nn #1#2
+  {
+    \str_case:nnF {#2}
+      {
+        { true }  { \bool_set_true:c  { l__genai_item_#1_bool } \tl_clear:c { l__genai_item_#1_tl } }
+        { yes }   { \bool_set_true:c  { l__genai_item_#1_bool } \tl_clear:c { l__genai_item_#1_tl } }
+        { false } { \bool_set_false:c { l__genai_item_#1_bool } \tl_clear:c { l__genai_item_#1_tl } }
+        { no }    { \bool_set_false:c { l__genai_item_#1_bool } \tl_clear:c { l__genai_item_#1_tl } }
+      }
+      {
+        \bool_set_true:c { l__genai_item_#1_bool }
+        \tl_set:cn { l__genai_item_#1_tl } {#2}
+      }
+  }
+
+%% ---- defining variants ----------------------------------------
+\cs_new_protected:Npn \__genai_prop_put:nn #1#2
+  { \prop_gput:cnn { g__genai_ \l__genai_cur_tl _prop } {#1} {#2} }
+
+%% Drop item #1 from the variant being defined (no message).
+\cs_new_protected:Npn \__genai_remove_item_silent:n #1
+  {
+    \bool_set_false:N \l__genai_found_bool
+    \seq_set_eq:Nc \l__genai_tmp_seq { g__genai_ \l__genai_cur_tl _items_seq }
+    \seq_gclear:c { g__genai_ \l__genai_cur_tl _items_seq }
+    \seq_map_inline:Nn \l__genai_tmp_seq { \__genai_keep_unless:nn {##1} {#1} }
+  }
+\cs_new_protected:Npn \__genai_keep_unless:nn #1#2
+  { \__genai_keep_unless_aux:nnnn #1 {#2} }
+\cs_new_protected:Npn \__genai_keep_unless_aux:nnnn #1#2#3#4
+  {
+    \str_if_eq:nnTF {#1} {#4}
+      {
+        \bool_set_true:N \l__genai_found_bool
+        \tl_set:Nn \l__genai_removed_tl { {#1}{#2}{#3} }
+      }
+      { \seq_gput_right:cn { g__genai_ \l__genai_cur_tl _items_seq } { {#1}{#2}{#3} } }
+  }
+
+%% movetoend = {key,...}: keep the wording, print it after everything else.
+\cs_new_protected:Npn \__genai_move_to_end:n #1
+  {
+    \__genai_remove_item_silent:n {#1}
+    \bool_if:NTF \l__genai_found_bool
+      { \seq_gput_right:cV { g__genai_ \l__genai_cur_tl _items_seq } \l__genai_removed_tl }
+      { \msg_warning:nnee { ou-genai } { unknown-item } { \l__genai_cur_tl } {#1} }
+  }
+
+%% Add (or replace, moving to the end) item #1 = {#2}{#3}.
+\cs_new_protected:Npn \__genai_add_item_aux:nnn #1#2#3
+  {
+    \__genai_remove_item_silent:n {#1}
+    \seq_gput_right:cn { g__genai_ \l__genai_cur_tl _items_seq } { {#1}{#2}{#3} }
+    \__genai_ensure_state:n {#1}
+    \exp_args:Ne \keys_define:nn { ou-genai / variant / \l__genai_cur_tl }
+      {
+        #1 .code:n    = \__genai_set_item:nn {#1} {##1},
+        #1 .default:n = true,
+      }
+  }
+\cs_new_protected:Npn \__genai_add_item:nn #1#2 { \__genai_add_item_aux:nnn {#1} #2 }
+\cs_generate_variant:Nn \__genai_add_item:nn { Vn }
+\cs_new_protected:Npn \__genai_add_item_seq:n #1 { \__genai_add_item_aux:nnn #1 }
+
+\cs_new_protected:Npn \__genai_remove_item:n #1
+  {
+    \__genai_remove_item_silent:n {#1}
+    \bool_if:NTF \l__genai_found_bool
+      { \exp_args:Ne \keys_define:nn { ou-genai / variant / \l__genai_cur_tl } { #1 .undefine: } }
+      { \msg_warning:nnee { ou-genai } { unknown-item } { \l__genai_cur_tl } {#1} }
+  }
+
+\cs_new_protected:Npn \__genai_inherit:n #1
+  {
+    \prop_if_exist:cTF { g__genai_#1_prop }
+      {
+        \prop_gset_eq:cc { g__genai_ \l__genai_cur_tl _prop } { g__genai_#1_prop }
+        \seq_gclear:c { g__genai_ \l__genai_cur_tl _items_seq }
+        \seq_map_inline:cn { g__genai_#1_items_seq } { \__genai_add_item_seq:n {##1} }
+      }
+      { \msg_error:nnn { ou-genai } { unknown-inherit } {#1} }
+  }
+
+\keys_define:nn { ou-genai / define }
+  {
+    inherit      .code:n = \__genai_inherit:n {#1},
+    heading      .code:n = \__genai_prop_put:nn { heading }      {#1},
+    instruction  .code:n = \__genai_prop_put:nn { instruction }  {#1},
+    intro        .code:n = \__genai_prop_put:nn { intro }        {#1},
+    tick         .code:n = \__genai_prop_put:nn { tick }         {#1},
+    module       .code:n = \__genai_prop_put:nn { module }       {#1},
+    presentation .code:n = \__genai_prop_put:nn { presentation } {#1},
+    exclusive    .code:n = \__genai_prop_put:nn { exclusive }    {#1},
+    items        .code:n = \keys_set:nn { ou-genai / define / items } {#1},
+    remove       .code:n = \clist_map_inline:nn {#1} { \__genai_remove_item:n {##1} },
+    movetoend    .code:n = \clist_map_inline:nn {#1} { \__genai_move_to_end:n {##1} },
+  }
+\keys_define:nn { ou-genai / define / items }
+  { unknown .code:n = \__genai_add_item:Vn \l_keys_key_str {#1} }
+
+%% \genaidefinevariant{name}{keyval}
+%%   A fresh name starts empty; an existing name is amended in place.
+%%   Not wrapped in a group on purpose: l3keys definitions are local, so
+%%   the per-item tick keys would be lost at \group_end:. Use it at top
+%%   level (the preamble, or this file), never inside an environment.
+\NewDocumentCommand \genaidefinevariant { m m }
+  {
+    \tl_set:Ne \l__genai_cur_tl { \tl_trim_spaces:n {#1} }
+    \prop_if_exist:cF { g__genai_ \l__genai_cur_tl _prop }
+      {
+        \prop_new:c { g__genai_ \l__genai_cur_tl _prop }
+        \seq_new:c  { g__genai_ \l__genai_cur_tl _items_seq }
+        \seq_gput_right:NV \g__genai_variants_seq \l__genai_cur_tl
+      }
+    \keys_set:nn { ou-genai / define } {#2}
+  }
+
+%% ---- selecting and rendering ----------------------------------
+\keys_define:nn { ou-genai }
+  {
+    variant         .tl_set:N   = \l__genai_variant_tl,
+    module          .tl_set:N   = \l__genai_module_tl,
+    presentation    .tl_set:N   = \l__genai_presentation_tl,
+    frame           .bool_set:N = \l__genai_frame_bool,
+    frame           .default:n  = true,
+    showinstruction .bool_set:N = \l__genai_showinstruction_bool,
+    showinstruction .default:n  = true,
+  }
+
+\NewDocumentCommand \genaisetup { m } { \keys_set:nn { ou-genai } {#1} }
+
+\cs_new:Npn \__genai_prop:n #1
+  { \prop_item:cn { g__genai_ \l__genai_variant_tl _prop } {#1} }
+
+%% Heading prefix "M248 26J: ". Precedence for module:
+%%   \genaiproforma[module=] > \genaisetup{module=} > ou-tma's \mycourse > variant default
+%% and for presentation the same minus ou-tma, which has no such field.
+\cs_new_protected:Npn \__genai_resolve_meta:
+  {
+    \tl_if_empty:NT \l__genai_module_tl
+      {
+        \tl_if_exist:NTF \g_tma_constant_course
+          { \tl_set_eq:NN \l__genai_module_tl \g_tma_constant_course }
+          { \prop_get:cnN { g__genai_ \l__genai_variant_tl _prop } { module } \l__genai_module_tl }
+      }
+    \tl_if_empty:NT \l__genai_presentation_tl
+      { \prop_get:cnN { g__genai_ \l__genai_variant_tl _prop } { presentation } \l__genai_presentation_tl }
+    \quark_if_no_value:NT \l__genai_module_tl       { \tl_clear:N \l__genai_module_tl }
+    \quark_if_no_value:NT \l__genai_presentation_tl { \tl_clear:N \l__genai_presentation_tl }
+    \tl_clear:N \l__genai_prefix_tl
+    \tl_if_empty:NF \l__genai_module_tl
+      { \tl_put_right:NV \l__genai_prefix_tl \l__genai_module_tl }
+    \tl_if_empty:NF \l__genai_presentation_tl
+      {
+        \tl_if_empty:NF \l__genai_prefix_tl { \tl_put_right:Nn \l__genai_prefix_tl { ~ } }
+        \tl_put_right:NV \l__genai_prefix_tl \l__genai_presentation_tl
+      }
+    \tl_if_empty:NF \l__genai_prefix_tl { \tl_put_right:Nn \l__genai_prefix_tl { :~ } }
+  }
+
+\cs_new_protected:Npn \__genai_count:nnn #1#2#3
+  {
+    \clist_put_right:Nn \l__genai_keys_clist {#1}
+    \bool_if:cT { l__genai_item_#1_bool } { \int_incr:N \l__genai_ticked_int }
+  }
+
+\cs_new_protected:Npn \__genai_check:
+  {
+    \int_zero:N \l__genai_ticked_int
+    \clist_clear:N \l__genai_keys_clist
+    \seq_map_inline:cn { g__genai_ \l__genai_variant_tl _items_seq } { \__genai_count:nnn ##1 }
+    \int_compare:nNnT \l__genai_ticked_int = 0
+      {
+        \msg_warning:nnee { ou-genai } { nothing-ticked }
+          { \l__genai_variant_tl } { \clist_use:Nn \l__genai_keys_clist { ,~ } }
+      }
+    \prop_get:cnNT { g__genai_ \l__genai_variant_tl _prop } { exclusive } \l__genai_tmp_tl
+      {
+        \clist_set:NV \l__genai_tmp_clist \l__genai_tmp_tl
+        \clist_map_inline:Nn \l__genai_tmp_clist
+          {
+            \bool_if:cT { l__genai_item_##1_bool }
+              {
+                \int_compare:nNnT \l__genai_ticked_int > 1
+                  { \msg_warning:nnn { ou-genai } { exclusive } {##1} }
+              }
+          }
+      }
+  }
+
+\cs_new_protected:Npn \__genai_render_item:nnn #1#2#3
+  {
+    \item [ \bool_if:cTF { l__genai_item_#1_bool } { \genaiticked } { \genaiunticked } ]
+    #2
+    \tl_if_empty:nF {#3} { \\ #3 }
+    \tl_if_empty:cF { l__genai_item_#1_tl }
+      { \\ \genaidetail { \tl_use:c { l__genai_item_#1_tl } } }
+  }
+
+%% Run #2 with \l__genai_tmp_tl holding variant text #1, if it is non-empty.
+\cs_new_protected:Npn \__genai_text:nn #1#2
+  {
+    \prop_get:cnNT { g__genai_ \l__genai_variant_tl _prop } {#1} \l__genai_tmp_tl
+      { \tl_if_empty:NF \l__genai_tmp_tl { #2 } }
+  }
+
+\cs_new_protected:Npn \__genai_body:
+  {
+    \par \noindent
+    { \genaiheadingfont \l__genai_prefix_tl \__genai_prop:n { heading } \par }
+    \bool_if:NT \l__genai_showinstruction_bool
+      {
+        \__genai_text:nn { instruction }
+          { \medskip \noindent { \genaiinstructionfont \l__genai_tmp_tl \par } }
+      }
+    \__genai_text:nn { intro } { \medskip \noindent \l__genai_tmp_tl \par }
+    \__genai_text:nn { tick }  { \noindent \l__genai_tmp_tl \par }
+    \begin{genai@list}
+      \seq_map_inline:cn { g__genai_ \l__genai_variant_tl _items_seq }
+        { \__genai_render_item:nnn ##1 }
+    \end{genai@list}
+  }
+
+%% \genaiproforma[variant=..., module=..., presentation=..., frame,
+%%                showinstruction=false, <item>, <item>={note}, ...]
+\NewDocumentCommand \genaiproforma { O{} }
+  {
+    \group_begin:
+      \keys_set_known:nnN { ou-genai } {#1} \l__genai_tmp_tl
+      \prop_if_exist:cTF { g__genai_ \l__genai_variant_tl _prop }
+        {
+          \exp_args:Ne \keys_set:nV { ou-genai / variant / \l__genai_variant_tl } \l__genai_tmp_tl
+          \__genai_resolve_meta:
+          \__genai_check:
+          \bool_if:NTF \l__genai_frame_bool
+            {
+              %% minipage zeroes \parskip; carry the document's value in so
+              %% the framed form is spaced exactly like the unframed one.
+              \dim_set:Nn \l__genai_parskip_dim { \parskip }
+              \dim_set:Nn \fboxsep { 6pt }
+              \par \noindent
+              \fbox
+                {
+                  \begin{minipage} { \dimexpr \linewidth - 2\fboxsep - 2\fboxrule \relax }
+                    \dim_set:Nn \parskip { \l__genai_parskip_dim }
+                    \__genai_body:
+                  \end{minipage}
+                }
+              \par
+            }
+            { \__genai_body: }
+        }
+        {
+          \msg_error:nnee { ou-genai } { no-variant }
+            { \l__genai_variant_tl } { \seq_use:Nn \g__genai_variants_seq { ,~ } }
+        }
+    \group_end:
+  }
+
+\ExplSyntaxOff
+
+%% ---------------------------------------------------------------
+%% 3. Variants. One block per module/presentation the OU has issued
+%%    a proforma for. NEVER edit a published block: `inherit' from it
+%%    under a new name and change the copy.
+%%
+%%    items     = { <key> = {<wording>}{<e.g. line, or empty>}, ... }
+%%    exclusive = { <keys that make no sense alongside any other> }
+%% ---------------------------------------------------------------
+
+%% M248 26J -- transcribed from "M248 TMA proforma for generative AI 26J.docx"
+\genaidefinevariant{m248-26j}{
+  module       = {M248},
+  presentation = {26J},
+  heading      = {TMA proforma for generative AI use},
+  instruction  = {Please use this proforma at the beginning of your TMA to
+                  indicate how/if you have used generative AI.},
+  intro        = {I have used Generative AI in this TMA (such as Copilot,
+                  Gemini or ChatGPT) to help with the following:},
+  tick         = {[please tick all that apply]},
+  items = {
+    starting  = {As a starting point or inspiration with a part of the TMA}
+                {e.g. to understand wording in the TMA.},
+    improving = {To improve my own work}
+                {e.g. with style and phrasing.},
+    learning  = {As a learning aid}
+                {e.g. when working through the mathematics.},
+    none      = {I did not use generative AI to help me with this TMA}
+                {},
+  },
+  exclusive = {none},
+}
+
+%% Next variant goes here, e.g.
+%% \genaidefinevariant{m248-27j}{ inherit = m248-26j, presentation = {27J}, ... }
+
+\endinput
